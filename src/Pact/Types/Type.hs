@@ -294,7 +294,6 @@ instance FromJSON SchemaPartial where
     (withThisText "AnySubschema" "any" v $ pure AnySubschema) <|>
     (PartialSchema <$> parseJSON v)
 
-
 showPartial :: SchemaPartial -> String
 showPartial FullSchema = ""
 showPartial (PartialSchema ks)
