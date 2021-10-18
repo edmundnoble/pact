@@ -15,6 +15,15 @@ data TyRow n =
 
 -- | Our internal core type language
 --   Tables, rows and and interfaces are quite similar,
+--    t ::= B
+--      |   v
+--      |   t -> t
+--      |   row
+--      |   list<t>
+--      |   interface name row
+--
+--    row  ::= {name:t, row*}
+--    row* ::= name:t | ϵ
 data Type n
   = TyVar n
   | TyPrim PrimType
@@ -23,11 +32,13 @@ data Type n
   -- ^ Row objects
   | TyList (Type n)
   -- ^ List aka [a]
-  | TyTable [TyRow n]
-  -- ^ Table types.
-  | TyGuard n
-  -- ^ Guards
+  | TyTable (Maybe n) [TyRow n]
+  -- ^ Tables, which may be inlined or optionally named
+  -- | TyGuard n
+  -- -- ^ Guards
   | TyCap n (Type n) [TyRow n]
   -- ^ Capabilities (do we want the dependent caps as part of the type?)
   | TyInterface n [TyRow n]
   deriving (Eq, Ord, Show)
+
+data TypeScheme 

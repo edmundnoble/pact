@@ -101,6 +101,10 @@ library
     Pact.Types.Version
     Pact.Types.Typecheck
     Pact.Typechecker
+    Pact.Core.Typed.Term
+    Pact.Core.Builtin
+    Pact.Core.Names
+    Pact.Core.Type
   build-depends:
     , Decimal >= 0.4.2 && < 0.6
     , QuickCheck >= 2.12.6.1
