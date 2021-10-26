@@ -1,6 +1,7 @@
 module Pact.Core.Builtin where
 
-
-data BaseBuiltin
+-- monomorphised builtin operations
+data ResolvedBuiltin
   = AddInt
   | SubInt
+  deriving (Eq, Show)

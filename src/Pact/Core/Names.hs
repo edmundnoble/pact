@@ -1,24 +1,52 @@
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia #-}
+
+
+
 module Pact.Core.Names where
 
+import Control.Lens
 import Data.Text(Text)
+import Data.IntMap.Strict(IntMap)
 import Data.IORef (IORef, atomicModifyIORef')
-import Pact.Types.Lang (TypeName(TypeName))
 
 newtype Unique = Unique Int deriving (Show, Eq, Ord)
 
 newtype Supply = Supply (IORef Int)
 
-
-newtype ByUnique a = ByUnique a deriving (Eq, Show)
+newtype ByUnique a = ByUnique a deriving (Show)
 
 class HasUnique a where
-  getUnique :: a -> Unique
+  unique :: Lens' a Unique
+
+instance HasUnique Unique where
+  unique f u = f u
 
 instance (HasUnique a) => Eq (ByUnique a) where
-  l == r = getUnique l == getUnique
+  (ByUnique l) == (ByUnique r) = view unique l == view unique r
 
 instance (HasUnique a) => Ord (ByUnique a) where
-  l <= r = getUnique l <= getUnique r
+  (ByUnique l) <= (ByUnique r) = view unique l <= view unique r
+
+-- Unique Map
+newtype UniqueMap a
+  = UniqueMap (IntMap a)
+  deriving stock (Show, Eq)
+  deriving (Semigroup, Monoid) via (IntMap a)
+
+
+type instance Index (UniqueMap a) = Unique
+type instance IxValue (UniqueMap a) = a
+
+instance Ixed (UniqueMap a) where
+  ix (Unique i) f (UniqueMap m)= UniqueMap <$> ix i f m
+
+instance At (UniqueMap a) where
+  at (Unique i) f (UniqueMap m) =
+    UniqueMap <$> at i f m
 
 newUnique :: Supply -> IO Unique
 newUnique (Supply ref) =
@@ -53,13 +81,17 @@ data TypeName
   , _tynameUnique :: !Unique }
   deriving (Show, Eq)
 
+makeLenses ''Name
+makeLenses ''TypeVar
+makeLenses ''TypeName
+
 instance HasUnique Name where
-  getUnique = _nameUnique
+  unique = nameUnique
 
 instance HasUnique TypeVar where
-  getUnique = \case
-    TypeVar _ u -> u
-    UnificationVar _ u -> u
+  unique f = \case
+    TypeVar a u -> TypeVar a <$> f u
+    UnificationVar a u -> UnificationVar a <$> f u
 
 instance HasUnique TypeName where
-  getUnique = _tynameUnique
+  unique = tynameUnique

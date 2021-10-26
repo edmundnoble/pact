@@ -91,7 +91,6 @@ genLiteralBool = LBool <$> arbitrary
 genLiteralTime :: Gen Literal
 genLiteralTime = LTime <$> genArbitraryUTCTime
 
-
 data Literal =
     LString { _lString :: !Text } |
     LInteger { _lInteger :: !Integer } |
@@ -329,8 +328,6 @@ pattern CommaExp <- ESeparator (SeparatorExp Comma _i)
 
 pattern ColonExp :: Exp t
 pattern ColonExp <- ESeparator (SeparatorExp Colon _i)
-
-
 
 
 -- | Pair parsed Pact expressions with the original text.

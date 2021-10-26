@@ -13,7 +13,7 @@ data Term name tyname builtin info
   | App (Term name tyname builtin info) (Term name tyname builtin info) info
   | TyApp (Term name tyname builtin info) (Type tyname) info
   | TyAbs tyname (Term name tyname builtin info) info
-  | Error (Type tyname) info
+  | Error String (Type tyname) info
   | Builtin builtin info
   | Constant Literal info
   deriving (Show)
@@ -25,7 +25,7 @@ termInfo f = \case
   App t1 t2 i -> App t1 t2 <$> f i
   TyApp term ty i -> TyApp term ty <$> f i
   TyAbs ty term i -> TyAbs ty term <$> f i
-  Error ty i -> Error ty <$> f i
+  Error s ty i -> Error s ty <$> f i
   Builtin b i -> Builtin b <$> f i
   Constant l i -> Constant l <$> f i
 
@@ -36,6 +36,6 @@ instance Plated (Term name tyname builtin info) where
     App t1 t2 i -> App <$> f t1 <*> f t2 <*> pure i
     TyApp term ty i -> TyApp <$> f term <*> pure ty <*> pure i
     TyAbs ty term i -> TyAbs ty <$> f term <*> pure i
-    Error ty i -> pure (Error ty i)
+    Error s ty i -> pure (Error s ty i)
     Builtin b i -> pure (Builtin b i)
     Constant l i -> pure (Constant l i)
