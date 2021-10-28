@@ -18,7 +18,7 @@ data PrimType =
   deriving (Eq,Ord,Show)
 
 data TyRow n =
-  Row (n, Type n) | EmptyRow
+  Row !n (Type n) | EmptyRow
   deriving (Eq,Ord,Show)
 
 
@@ -61,7 +61,7 @@ data Type n
 
 traverseRowTy :: Traversal' (TyRow n) (Type n)
 traverseRowTy f = \case
-  Row (n, ty) -> Row . (n,) <$> f ty
+  Row n ty -> Row n <$> f ty
   EmptyRow -> pure EmptyRow
 
 
@@ -78,7 +78,6 @@ instance Plated (Type n) where
       TyInterface n <$> traverse (traverseRowTy f) rows
     TyForall ns ty ->
       TyForall ns <$> f ty
-
 
 
 substInTy :: Ord n => Map.Map n (Type n) -> Type n -> Type n
