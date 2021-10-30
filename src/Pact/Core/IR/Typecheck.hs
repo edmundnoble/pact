@@ -2,7 +2,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
-
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Pact.Core.IR.Typecheck where
 
@@ -43,26 +44,29 @@ instance Substitutable Constraint where
       Just (TyVar n') -> n'
       _ -> n
 
-class FTV f where
-  ftv :: Ord n => f n -> Set.Set n
+class FTV p n | p -> n where
+  ftv :: p -> Set.Set n
 
-instance FTV TyRow where
-  ftv = \case
-    Row _ ty -> ftv ty
-    EmptyRow -> mempty
+instance Ord n => FTV (Map.Map n (Type n)) n where
+  ftv = foldMap ftv
 
-instance FTV Type where
+instance Ord n => FTV (Type n) n where
   ftv = \case
     TyVar n -> Set.singleton n
     TyPrim _ -> mempty
     TyFun l r -> Set.union (ftv l) (ftv r)
-    TyRow rows -> foldMap ftv rows
+    TyRow rows -> ftv rows
     TyList t -> ftv t
-    TyTable _ rows -> foldMap ftv rows
-    TyInterface _ rows -> foldMap ftv rows
+    TyTable _ rows -> ftv rows
+    TyInterface _ rows -> ftv rows
     TyForall ns typ -> ftv typ `Set.difference` (Set.fromList ns)
 
-instance FTV TyScheme where
+instance Ord n => FTV (TyRow n) n where
+  ftv = \case
+    ClosedRow tv -> ftv tv
+    OpenRow tv -> ftv tv
+
+instance Ord n => FTV (TyScheme n) n where
   ftv (TyScheme ns typ) =
     ftv typ `Set.difference` (Set.fromList ns)
 
@@ -79,11 +83,13 @@ compose m1 m2 = (subst m1 <$> m2) `Map.union` m1
 
 bind :: (Ord k, MonadError [Char] f) => k -> Type k -> f (Map.Map k (Type k))
 bind n t | t == TyVar n = pure mempty
-         | occursCheck n t = throwError "asdf"
+         | occursCheck n t = throwError ""
          | otherwise = pure (Map.singleton n t)
 
-occursCheck :: (Ord n, FTV f) => n -> f n -> Bool
+occursCheck :: (Ord n, FTV f n) => n -> f -> Bool
 occursCheck n t = Set.member n (ftv t)
+
+unifyRows l r = undefined
 
 unifies t1 t2 | t1 == t2 = pure mempty
 unifies (TyVar n) t2 = n `bind` t2
@@ -92,3 +98,5 @@ unifies (TyFun l r) (TyFun l' r') = do
   s1 <- unifies l l'
   s2 <- unifies (subst s1 r) (subst s1 r')
   pure (s2 `compose` s1)
+unifies (TyRow l) (TyRow r) = unifyRows l r
+
