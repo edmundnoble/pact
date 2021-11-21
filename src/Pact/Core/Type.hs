@@ -17,14 +17,12 @@ data PrimType =
   TyUnit
   deriving (Eq,Ord,Show)
 
-data TyRow n
-  = ClosedRow (Map.Map n (Type n))
-  | OpenRow (Map.Map n (Type n))
+newtype RowVar n = RowVar { _rowVar :: n }
   deriving (Eq, Show)
 
-
-data TypeScheme n
-  = TypeScheme [n] (Type n)
+data Row n
+  = RowTy (Map.Map n (Type n)) (Maybe (RowVar n))
+  | RowTyVar (RowVar n)
   deriving (Eq, Show)
 
 -- Todo: caps are a bit strange here
@@ -44,15 +42,15 @@ data Type n
   = TyVar n
   | TyPrim PrimType
   | TyFun (Type n) (Type n)
-  | TyRow (TyRow n)
+  | TyRow (Row n)
   -- ^ Row objects
   | TyList (Type n)
   -- ^ List aka [a]
-  | TyTable (Maybe n) (TyRow n)
-  -- ^ Tables, which may be inlined or optionally named
-  -- | TyCap n (Type n) [TyRow n]
-  -- ^ Capabilities (do we want the dependent caps as part of the type?)
-  | TyInterface n (TyRow n)
+  -- | TyTable (Maybe n) (Row n)
+  -- -- ^ Tables, which may be inlined or optionally named
+  -- -- | TyCap n (Type n) [TyRow n]
+  -- -- ^ Capabilities (do we want the dependent caps as part of the type?)
+  -- | TyInterface n (Row n)
   -- ^ interfaces as named rows, where defuns/consts correspond to fields
   | TyForall [n] (Type n)
   -- ^ Universally quantified types, which have to be part of the type
@@ -60,10 +58,10 @@ data Type n
   -- Todo: probably want `NonEmpty a` here
   deriving (Show)
 
-traverseRowTy :: Traversal' (TyRow n) (Type n)
+traverseRowTy :: Traversal' (Row n) (Type n)
 traverseRowTy f = \case
-  ClosedRow tys -> ClosedRow <$> traverse f tys
-  OpenRow tys -> OpenRow <$> traverse f tys
+  RowTy tys rv -> RowTy <$> traverse f tys <*> pure rv
+  RowTyVar n -> pure (RowTyVar n)
 
 
 instance Plated (Type n) where
@@ -73,10 +71,10 @@ instance Plated (Type n) where
     TyFun l r -> TyFun <$> f l <*> f r
     TyRow rows -> TyRow <$> traverseRowTy f rows
     TyList t -> TyList <$> f t
-    TyTable n rows ->
-      TyTable n <$> traverseRowTy f rows
-    TyInterface n rows ->
-      TyInterface n <$> traverseRowTy f rows
+    -- TyTable n rows ->
+    --   TyTable n <$> traverseRowTy f rows
+    -- TyInterface n rows ->
+      -- TyInterface n <$> traverseRowTy f rows
     TyForall ns ty ->
       TyForall ns <$> f ty
 
@@ -99,10 +97,10 @@ instance (Ord n) => Eq (Type n) where
   (TyRow row') == (TyRow row) =
     row == row'
   (TyList n) == (TyList n') = n == n'
-  (TyTable _ row) == (TyTable _ row') =
-    row == row'
-  (TyInterface n row) == (TyInterface n' row') =
-    n == n' && row == row'
+  -- (TyTable _ row) == (TyTable _ row') =
+  --   row == row'
+  -- (TyInterface n row) == (TyInterface n' row') =
+  --   n == n' && row == row'
   (TyForall ns ty) == (TyForall ns' ty') =
     let n = Map.fromList $ zipWith (\a b -> (b, TyVar a)) ns ns'
     in ty == substInTy n ty'

@@ -19,6 +19,7 @@ data Term name builtin info
   | Lam name (Term name builtin info) info
   | Let name (Term name builtin info) (Term name builtin info) info
   | App (Term name builtin info) (Term name builtin info) info
+  | Sequence (Term name builtin info) (Term name builtin info) info
   | Error String info
   | Builtin builtin info
   | Constant Literal info
@@ -34,6 +35,7 @@ termInfo f = \case
   Error s i -> Error s <$> f i
   Builtin b i -> Builtin b <$> f i
   Constant l i -> Constant l <$> f i
+  Sequence l r i -> Sequence l r <$> f i
 
 instance Plated (Term name builtin info) where
   plate f = \case
@@ -44,3 +46,4 @@ instance Plated (Term name builtin info) where
     Error s i -> pure (Error s i)
     Builtin b i -> pure (Builtin b i)
     Constant l i -> pure (Constant l i)
+    Sequence l r i -> Sequence <$> f l <*> f r <*> pure i
