@@ -17,12 +17,11 @@ module Pact.Core.Typed.Typecheck where
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.Except
-import qualified Data.Map.Strict as Map
+-- import qualified Data.Map.Strict as Map
 
 import Pact.Core.Typed.Term
 import Pact.Core.Type
 import Pact.Core.Names
-import Pact.Types.Exp (Literal(..))
 
 
 data TCEnv builtin tyname = TCEnv
@@ -32,14 +31,6 @@ data TCEnv builtin tyname = TCEnv
 
 makeLenses ''TCEnv
 
-typeOfLit :: Literal -> Type tyname
-typeOfLit = TyPrim . \case
-  LString _ ->  TyString
-  LInteger _ -> TyInt
-  LDecimal _ -> TyDecimal
-  LBool _ -> TyBool
-  LTime _ -> TyTime
-
 applyFunctionType :: (Ord n, MonadError String f) => Type n -> Type n -> f (Type n)
 applyFunctionType (TyFun l r) l'
   | l == l' = pure r
@@ -47,12 +38,14 @@ applyFunctionType (TyFun l r) l'
 applyFunctionType _ _ =
   throwError "term application to non-function"
 
-tyApp :: (MonadError String m, Ord n, Show n) => Type n -> Type n -> m (Type n)
-tyApp (TyForall l tfty) ty = case l of
-  [] -> throwError "empty"
-  n:ns -> case ns of
-    [] -> pure $ substInTy (Map.singleton n ty) tfty
-    _ -> pure $ TyForall ns $ substInTy (Map.singleton n ty) tfty
+-- tyApp :: (MonadError String m, Ord n, Show n) => Type n -> Type n -> m (Type n)
+tyApp :: (MonadError String m, Show n, Show a1) => Type n -> a1 -> m a2
+tyApp (TyForall l r _tfty) _ty = case (l, r) of
+  ([], []) -> undefined
+  (_, _) -> undefined
+    -- case ns of
+    -- [] -> pure $ substInTy (Map.singleton n ty) tfty
+    -- _ -> pure $ TyForall ns $ substInTy (Map.singleton n ty) tfty
 tyApp t1 tyr =
   throwError $ "Cannot apply: " <> show t1 <> " to: " <> show tyr
 
@@ -93,10 +86,11 @@ typecheck' = \case
   -- Γ,X ⊢ x:t1
   -- ------------------------ (T-TAbs)
   -- Γ ⊢ ΛX.x:∀X.t1
+  -- BIG TODO: ROW APPS
   TyAbs tn term _ ->
     locally tcTypeEnv (set (at (tn ^. unique)) (Just (TyVar tn))) (typecheck' term) >>= \case
-      TyForall xs ty -> pure $ TyForall (tn:xs) ty
-      t -> pure $ TyForall [tn] t
+      TyForall xs rs ty -> pure $ TyForall (tn:xs) rs ty
+      t -> pure $ TyForall [tn] [] t
   -- ------------------------ (T-Error)
   -- Γ ⊢ (error msg t1) : t1
   Error _ t _ ->
