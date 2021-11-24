@@ -21,12 +21,10 @@ data PrimType =
   TyUnit
   deriving (Eq,Ord,Show)
 
-newtype RowVar n = RowVar { _rowVar :: n }
-  deriving (Eq, Show)
-
 data Row n
-  = RowTy (Map.Map n (Type n)) (Maybe (RowVar n))
-  | RowTyVar (RowVar n)
+  = RowTy (Map.Map n (Type n)) (Maybe n)
+  | RowVar n
+  | EmptyRow
   deriving (Eq, Show)
 
 -- Todo: caps are a bit strange here
@@ -65,7 +63,8 @@ data Type n
 traverseRowTy :: Traversal' (Row n) (Type n)
 traverseRowTy f = \case
   RowTy tys rv -> RowTy <$> traverse f tys <*> pure rv
-  RowTyVar n -> pure (RowTyVar n)
+  RowVar n -> pure (RowVar n)
+  EmptyRow -> pure EmptyRow
 
 
 instance Plated (Type n) where

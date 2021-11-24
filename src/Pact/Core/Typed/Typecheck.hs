@@ -20,7 +20,7 @@ import Control.Monad.Except
 -- import qualified Data.Map.Strict as Map
 
 import Pact.Core.Typed.Term
-import Pact.Core.Type
+import Pact.Core.Type ( typeOfLit, Type(TyForall, TyFun, TyVar) )
 import Pact.Core.Names
 
 

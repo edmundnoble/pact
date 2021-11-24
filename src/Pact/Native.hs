@@ -54,7 +54,7 @@ module Pact.Native
     ) where
 
 import Control.Arrow hiding (app)
-import Control.Lens hiding (parts,Fold,contains)
+import Control.Lens ( (&), preview, use, view, _Just, (.=), over )
 import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
