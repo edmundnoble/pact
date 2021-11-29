@@ -1,6 +1,5 @@
 module Pact.Core.Builtin where
 
-
 data RawBuiltin
   = RawAdd
   | RawSub

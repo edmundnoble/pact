@@ -55,7 +55,8 @@ newUnique (Supply ref) =
 
 data NameKind
   = TopLevelName -- Script top level names, not bound to any module
-  | ModuleBoundName !Text
+  | ModuleName
+  | DefName
   | LocallyBoundName
   deriving (Show, Eq)
 

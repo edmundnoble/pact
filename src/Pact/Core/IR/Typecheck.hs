@@ -21,10 +21,11 @@ module Pact.Core.IR.Typecheck where
 
 import Control.Lens
 import Data.Set(Set)
+import Data.Foldable(fold)
 import Data.Map(Map)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
-import Data.List(find, delete)
+import Data.List(find)
 import Data.Maybe (fromJust, fromMaybe)
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -34,20 +35,9 @@ import Pact.Core.Names
 import Pact.Core.IR.Term
 import Pact.Core.IR.Typecheck.Assumption (Assumption(..))
 import qualified Pact.Core.IR.Typecheck.Assumption as AS
-import Data.Foldable(fold)
-import Data.Text(Text)
 
-data RowPredicate n =
-  WithoutField n n
-  deriving (Show)
-
-data Rho tyname =
-  RhoPredicate [RowPredicate tyname] (Type tyname)
-  deriving (Show)
-
-data TyScheme n = TyScheme [n] [n] (Rho n)
-  deriving (Show)
-
+data TyScheme n = TyScheme [n] [n] (Type n)
+  deriving (Eq, Show)
 
 data TCEnv name tyname builtin
   = TCEnv
@@ -55,14 +45,9 @@ data TCEnv name tyname builtin
   , _tcEnv :: Map.Map name (TyScheme tyname) -- ^ Typescheme environment
   , _tcNonGen :: Set.Set tyname -- ^ Monomorphic set to not generalize
   , _tcLiftName :: Unique -> tyname
-  , _tcBuiltin :: Map.Map builtin (TyScheme tyname)
-  }
+  , _tcBuiltin :: Map.Map builtin (TyScheme tyname) }
 
 makeLenses ''TCEnv
-
-
-rhotype :: Rho tyname -> Type tyname
-rhotype (RhoPredicate _ t) = t
 
 freshVar :: (MonadIO m, MonadReader (TCEnv name tyname builtin) m) => m tyname
 freshVar = do
@@ -75,7 +60,7 @@ data Constraint n
   = EqConst (Type n) (Type n)
   | ExpInstConst (Type n) (TyScheme n)
   | ImpInstConst (Type n) (Set.Set n) (Type n)
-  deriving (Show)
+  deriving (Eq, Show)
 
 
 -- type Subst n = Map.Map n (Type n)
@@ -113,17 +98,17 @@ instance Ord n => Monoid (FreeTyVars n) where
 class Substitutable p n | p -> n where
   subst :: Subst n -> p -> p
 
-instance Ord n => Substitutable (Rho n) n where
-  subst s@(Subst _ rows) = \case
-    RhoPredicate preds ty ->
-      RhoPredicate (foldr f [] preds) (subst s ty)
-    where
-    f (WithoutField var field) li = case rows ^. at var of
-      Nothing -> WithoutField var field:li
-      Just row -> case row of
-        RowTy  _ _-> li
-        RowVar n -> WithoutField n field : li
-        EmptyRow -> li
+-- instance Ord n => Substitutable (Rho n) n where
+--   subst s@(Subst _ rows) = \case
+--     RhoPredicate preds ty ->
+--       RhoPredicate (foldr f [] preds) (subst s ty)
+--     where
+--     f (WithoutField var field) li = case rows ^. at var of
+--       Nothing -> WithoutField var field:li
+--       Just row -> case row of
+--         RowTy  _ _-> li
+--         RowVar n -> WithoutField n field : li
+--         EmptyRow -> li
 
 
 instance Ord n => Substitutable (Row n) n where
@@ -290,7 +275,7 @@ unifies (TyRow l) (TyRow r) = unifyRows l r
 unifies _ _ = error "reee"
 
 generalize :: Ord n => FreeTyVars n -> Type n -> TyScheme n
-generalize (FreeTyVars freetys freerows) t  = TyScheme as rs 
+generalize (FreeTyVars freetys freerows) t  = TyScheme as rs t
   where
   (FreeTyVars ftys frows) = ftv t
   as = Set.toList $ ftys`Set.difference` freetys
@@ -302,13 +287,13 @@ instantiate (TyScheme as rs t) = do
     rs' <- traverse (const freshVar) rs
     let tyS = Map.fromList $ zip as (TyVar <$> as')
         rowS = Map.fromList $ zip rs (RowVar <$> rs')
-    return $ subst (Subst tyS rowS) (rhotype t)
+    return $ subst (Subst tyS rowS) t
 
 -- todo: propagate infos for better errors.
-infer :: (Ord tyname, Ord builtin, Ord name, MonadReader (TCEnv name tyname builtin) m, MonadIO m)
+inferExpr :: (Ord tyname, Ord builtin, Ord name, MonadReader (TCEnv name tyname builtin) m, MonadIO m)
       => Term name builtin info
       -> m (Assumption name tyname, [Constraint tyname], Type tyname)
-infer = \case
+inferExpr = \case
   Constant l _ ->
     pure (AS.empty, [], typeOfLit l)
   Var n _ -> do
@@ -317,7 +302,7 @@ infer = \case
   Lam n body _ -> do
     rawTv <- freshVar
     let tv = TyVar rawTv
-    (as, cs, t) <- locally tcNonGen (Set.insert rawTv) (infer body)
+    (as, cs, t) <- locally tcNonGen (Set.insert rawTv) (inferExpr body)
     pure (AS.remove as n, cs ++ [EqConst t' tv | t' <- AS.lookup n as], TyFun tv t)
   -- I suspect this incorrectly quantifies row vars.
   -- I'm not yet sure how to have principled row quantification with constraints.
@@ -325,8 +310,8 @@ infer = \case
   -- in `monoSet`. In general: introduction of row variables is strange and likely can't be done without
   -- predicate quantification, which I've yet to add.
   Let n e1 e2 _ -> do
-    (as1, cs1, t1) <- infer e1
-    (as2, cs2, t2) <- infer e2
+    (as1, cs1, t1) <- inferExpr e1
+    (as2, cs2, t2) <- inferExpr e2
     monoSet <- view tcNonGen
     pure
       ( AS.remove (AS.merge as1 as2) n
@@ -334,8 +319,8 @@ infer = \case
       , t2)
   App e1 e2 _ -> do
     tv <- TyVar <$> freshVar
-    (as1, cs1, t1) <- infer e1
-    (as2, cs2, t2) <- infer e2
+    (as1, cs1, t1) <- inferExpr e1
+    (as2, cs2, t2) <- inferExpr e2
     pure ( as1 `AS.merge` as2
          , cs1 ++ cs2 ++ [EqConst t1 (TyFun t2 tv)]
          , tv )
@@ -343,12 +328,13 @@ infer = \case
     -- Will we require that the lhs of sequenced statements be unit?
     -- likely yes, it doesn't make sense to otherwise discard value results without binding them in a clause.
     -- for now, no.
-    (as1, cs1, _) <- infer e1
-    (as2, cs2, t2) <- infer e2
+    (as1, cs1, _) <- inferExpr e1
+    (as2, cs2, t2) <- inferExpr e2
     pure (as1 `AS.merge` as2, cs1 ++ cs2, t2)
   Error _ _ -> do
     tv <- TyVar <$> freshVar
     pure (AS.empty, [], tv)
+  DynAccess _ _ -> undefined
   Builtin b _ -> do
     benv <- view tcBuiltin
     bty <- instantiate $ benv Map.! b
@@ -361,7 +347,13 @@ infer = \case
 nextSolvable :: Ord a => [Constraint a] -> (Constraint a, [Constraint a])
 nextSolvable xs = fromJust (find solvable (chooseOne xs))
   where
-    chooseOne xss = [(x, ys) | x <- xss, let ys = delete x xss]
+    -- todo: this is using EQ instance for constraint.
+    -- [(x, ys) | x <- xss, let ys = delete x xss]
+    --
+    chooseOne xss = chooseOne' [] xss
+    chooseOne' acc = \case
+      x:xs' -> (x, reverse acc ++ xs'): chooseOne' (x:acc) xs'
+      [] -> []
     solvable (EqConst{}, _) = True
     solvable (ExpInstConst{}, _) = True
     solvable (ImpInstConst _ ms t2, cs) =

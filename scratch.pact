@@ -14,4 +14,3 @@
   )
 (create-table t)
 (insert t "" { 'mr: m })
-(m.f)
