@@ -10,11 +10,17 @@ in {
     kpkgs.rp.project ({ pkgs, hackGet, ... }: with pkgs.haskell.lib; {
       name = "pact";
       overrides = self: super: {
+        direct-sqlite = dontCheck (self.callHackageDirect {
+          pkg = "direct-sqlite";
+          ver = "2.3.26";
+          sha256 = "1kdkisj534nv5r0m3gmxy2iqgsn6y1dd881x77a87ynkx1glxfva";
+        } {});
+
         # The z3 dependency needs to be conditional so pact can be a
         # dependency of ghcjs apps.
-        pact = if self.ghc.isGhcjs or false
+        pact = dontCheck (if self.ghc.isGhcjs or false
                  then super.pact
-                 else addBuildDepend super.pact pkgs.z3;
+                 else addBuildDepend super.pact pkgs.z3);
 
         pact-time = dontCheck (self.callHackageDirect {
           pkg = "pact-time";
@@ -22,7 +28,7 @@ in {
           sha256 = "1cfn74j6dr4279bil9k0n1wff074sdlz6g1haqyyy38wm5mdd7mr";
         } {});
 
-        pact-do-benchmark = overrideCabal (doBenchmark super.pact) (oldDrv: {
+        pact-do-benchmark = overrideCabal (doBenchmark (dontCheck super.pact)) (oldDrv: {
           benchmarkSystemDepends = [ pkgs.z3 ];
           postBuild = ''
             mkdir -p log  # needed or else bench can't create a sqlitedb at log/sqlite.db

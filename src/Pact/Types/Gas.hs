@@ -43,6 +43,7 @@ import Pact.Types.Info
 import Pact.Types.Persistence
 import Pact.Types.Pretty
 import Pact.Types.PactValue
+import Pact.Types.RowData
 import Pact.Types.Term
 import Pact.Parse
 
@@ -67,7 +68,7 @@ instance Wrapped GasPrice
 -- | DB Read value for per-row gas costing.
 -- Data is included if variable-size.
 data ReadValue
-  = ReadData !(ObjectMap PactValue)
+  = ReadData !RowData
   | ReadKey !RowKey
   | ReadTxId
   | ReadModule !ModuleName !Code
@@ -137,6 +138,8 @@ data GasArgs
   -- ^ Cost of using a function, capability, or defpact
   | GMakeList !Integer
   -- ^ Cost of make-list
+  | GFoldDB
+  -- ^ Cost of the fold-db call
 
 instance Pretty GasArgs where
   pretty g = case g of
@@ -154,6 +157,7 @@ instance Pretty GasArgs where
     GMakeList i -> "GMakeList:" <> pretty i
     GSort i -> "GSort:" <> pretty i
     GDistinct i -> "GDistinct:" <> pretty i
+    GFoldDB -> "GFoldDB"
 
 newtype GasLimit = GasLimit ParsedInteger
   deriving (Eq,Ord,Num,Real,Integral,Enum,Serialize,NFData,Generic,ToTerm,ToJSON,Pretty)

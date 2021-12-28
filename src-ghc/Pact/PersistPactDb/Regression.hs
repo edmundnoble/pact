@@ -11,6 +11,8 @@ import Control.Exception
 import Control.Monad
 import Control.Lens hiding ((.=))
 import Control.DeepSeq
+import Data.Text(pack)
+import Data.Foldable(for_)
 
 import qualified Data.Map.Strict as M
 import qualified Data.HashMap.Strict as HM
@@ -26,6 +28,7 @@ import Pact.Types.PactValue
 import Pact.Repl
 import Pact.Repl.Types
 import Pact.Native (nativeDefs)
+import Pact.Types.RowData
 
 
 loadModule :: IO (ModuleName, ModuleData Ref, PersistModuleData)
@@ -65,10 +68,10 @@ runRegression p = do
     (commit v)
   void $ begin v
   assertEquals' "user table info correct" "free.some-Module" $ _getUserTableInfo pactdb user1 v
-  let row = ObjectMap $ M.fromList [("gah",PLiteral (LDecimal 123.454345))]
+  let row = RowData RDV0 $ ObjectMap $ M.fromList [("gah",pactValueToRowData $ PLiteral (LDecimal 123.454345))]
   _writeRow pactdb Insert usert "key1" row v
   assertEquals' "user insert" (Just row) (_readRow pactdb usert "key1" v)
-  let row' = ObjectMap $ M.fromList [("gah",toPV False),("fh",toPV (1 :: Int))]
+  let row' = RowData RDV1 $ ObjectMap $ fmap pactValueToRowData $ M.fromList [("gah",toPV False),("fh",toPV (1 :: Int))]
   _writeRow pactdb Update usert "key1" row' v
   assertEquals' "user update" (Just row') (_readRow pactdb usert "key1" v)
   let ks = mkKeySet [PublicKey "skdjhfskj"] "predfun"
@@ -112,6 +115,10 @@ runRegression p = do
   _rollbackTx pactdb v
   assertEquals' "rollback erases key2" Nothing $ _readRow pactdb usert "key2" v
   assertEquals' "keys" ["key1"] $ _keys pactdb (UserTables user1) v
+  -- Reversed just to ensure inserts are not in order.
+  for_ (reverse [2::Int .. 9]) $ \k ->
+    _writeRow pactdb Insert usert (RowKey $ "key" <> (pack $ show k)) row' v
+  assertEquals' "keys" [RowKey ("key" <> (pack $ show k)) | k <- [1 :: Int .. 9]] $ _keys pactdb (UserTables user1) v
   return v
 
 toTerm' :: ToTerm a => a -> Term Name
@@ -138,3 +145,7 @@ regressPure :: Loggers -> IO (MVar (DbEnv PureDb))
 regressPure l = do
   let e = initDbEnv l persister initPureDb
   runRegression e
+
+
+_regress :: IO ()
+_regress = void $ regressPure alwaysLog

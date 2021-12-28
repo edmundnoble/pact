@@ -10,6 +10,7 @@ import qualified Data.Text as T
 
 import Pact.Types.Continuation
 import Pact.Types.Gas
+import Pact.Types.RowData
 import Pact.Types.SizeOf
 import Pact.Types.Term
 
@@ -35,6 +36,7 @@ data GasCostConfig = GasCostConfig
   , _gasCostConfig_writeBytesCost :: Gas -- cost per bytes to write to database
   , _gasCostConfig_functionApplicationCost :: Gas
   , _gasCostConfig_defPactCost :: Gas
+  , _gasCostConfig_foldDBCost :: Gas
   }
 
 defaultGasConfig :: GasCostConfig
@@ -52,6 +54,7 @@ defaultGasConfig = GasCostConfig
   , _gasCostConfig_writeBytesCost = 1
   , _gasCostConfig_functionApplicationCost = 1
   , _gasCostConfig_defPactCost = 1   -- TODO benchmark
+  , _gasCostConfig_foldDBCost = 1
   }
 
 defaultGasTable :: Map Text Gas
@@ -120,6 +123,7 @@ defaultGasTable =
   ,("log", 3)
   ,("make-list",1)
   ,("map", 4)
+  ,("zip", 4)
   ,("minutes", 4)
   ,("mod", 1)
   ,("namespace", 12)
@@ -175,6 +179,7 @@ defaultGasTable =
   -- Multi row read, tx penalty
   ,("keys", 200)
   ,("select", 200)
+  ,("fold-db", 200)
 
   -- Metadata, tx penalty
   ,("describe-keyset", 100)
@@ -216,8 +221,9 @@ tableGasModel gasConfig =
           fromIntegral n * _gasCostConfig_sortFactor gasConfig
         GConcatenation i j ->
           fromIntegral (i + j) * _gasCostConfig_concatenationFactor gasConfig
+        GFoldDB -> _gasCostConfig_foldDBCost gasConfig
         GPostRead r -> case r of
-          ReadData cols -> _gasCostConfig_readColumnCost gasConfig * fromIntegral (Map.size (_objectMap cols))
+          ReadData cols -> _gasCostConfig_readColumnCost gasConfig * fromIntegral (Map.size (_objectMap $ _rdData cols))
           ReadKey _rowKey -> _gasCostConfig_readColumnCost gasConfig
           ReadTxId -> _gasCostConfig_readColumnCost gasConfig
           ReadModule _moduleName _mCode ->  _gasCostConfig_readColumnCost gasConfig

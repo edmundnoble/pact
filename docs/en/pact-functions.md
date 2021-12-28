@@ -437,7 +437,7 @@ Return ID if called during current pact execution, failing if not.
 Obtain current pact build version.
 ```lisp
 pact> (pact-version)
-"4.1.1"
+"4.1.3"
 ```
 
 Top level only: this function will fail if used in module code.
@@ -665,6 +665,22 @@ Yield OBJECT for use with 'resume' in following pact step. With optional argumen
 (yield { "amount": 100.0 } "some-chain-id")
 ```
 
+
+### zip {#zip}
+
+*f*&nbsp;`x:<a> y:<b> -> <c>` *list1*&nbsp;`[<a>]` *list2*&nbsp;`[<b>]` *&rarr;*&nbsp;`[<c>]`
+
+
+Combine two lists with some function f, into a new list, the length of which is the length of the shortest list.
+```lisp
+pact> (zip (+) [1 2 3 4] [4 5 6 7])
+[5 7 9 11]
+pact> (zip (-) [1 2 3 4] [4 5 6])
+[-3 -3 -3]
+pact> (zip (+) [1 2 3] [4 5 6 7])
+[5 7 9]
+```
+
 ## Database {#Database}
 
 ### create-table {#create-table}
@@ -716,6 +732,22 @@ Get metadata for TABLE. Returns an object with 'name', 'hash', 'blessed', 'code'
 Top level only: this function will fail if used in module code.
 
 
+### fold-db {#fold-db}
+
+*table*&nbsp;`table:<{row}>` *qry*&nbsp;`a:string b:object:<{row}> -> bool` *consumer*&nbsp;`a:string b:object:<{row}> -> <b>` *&rarr;*&nbsp;`[<b>]`
+
+
+Select rows from TABLE using QRY as a predicate with both key and value, and then accumulate results of the query in CONSUMER. Output is sorted by the ordering of keys.
+```lisp
+(let* 
+ ((qry (lambda (k obj) true)) ;; select all rows
+  (f (lambda (x) [(at 'firstName x), (at 'b x)]))
+ )
+ (fold-db people (qry) (f))
+)
+```
+
+
 ### insert {#insert}
 
 *table*&nbsp;`table:<{row}>` *key*&nbsp;`string` *object*&nbsp;`object:<{row}>` *&rarr;*&nbsp;`string`
@@ -743,7 +775,7 @@ Return updates to TABLE for a KEY in transactions at or after TXID, in a list of
 *table*&nbsp;`table:<{row}>` *&rarr;*&nbsp;`[string]`
 
 
-Return all keys in TABLE.
+Return all keys in TABLE as a sorted list.
 ```lisp
 (keys accounts)
 ```
@@ -769,7 +801,7 @@ Read row from TABLE for KEY, returning database record object, or just COLUMNS i
 *table*&nbsp;`table:<{row}>` *columns*&nbsp;`[string]` *where*&nbsp;`row:object:<{row}> -> bool` *&rarr;*&nbsp;`[object:<{row}>]`
 
 
-Select full rows or COLUMNS from table by applying WHERE to each row to get a boolean determining inclusion.
+Select full rows or COLUMNS from table by applying WHERE to each row to get a boolean determining inclusion. Output sorted based on keys.
 ```lisp
 (select people ['firstName,'lastName] (where 'name (= "Fatima")))
 (select people (where 'age (> 30)))?
@@ -952,7 +984,7 @@ pact> (time "2016-07-22T11:26:35Z")
 
 ### != {#bangeq}
 
-*x*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset]>` *y*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset,guard,module{}]>` *y*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset,guard,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 True if X does not equal Y.
@@ -1052,7 +1084,7 @@ pact> (/ 8 3)
 
 ### < {#lt}
 
-*x*&nbsp;`<a[integer,decimal,string,time]>` *y*&nbsp;`<a[integer,decimal,string,time]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *y*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 True if X < Y.
@@ -1068,7 +1100,7 @@ true
 
 ### <= {#lteq}
 
-*x*&nbsp;`<a[integer,decimal,string,time]>` *y*&nbsp;`<a[integer,decimal,string,time]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *y*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 True if X <= Y.
@@ -1084,7 +1116,7 @@ true
 
 ### = {#eq}
 
-*x*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset]>` *y*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset,guard,module{}]>` *y*&nbsp;`<a[integer,string,time,decimal,bool,[<l>],object:<{o}>,keyset,guard,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 Compare alike terms for equality, returning TRUE if X is equal to Y. Equality comparisons will fail immediately on type mismatch, or if types are not value types.
@@ -1100,7 +1132,7 @@ true
 
 ### > {#gt}
 
-*x*&nbsp;`<a[integer,decimal,string,time]>` *y*&nbsp;`<a[integer,decimal,string,time]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *y*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 True if X > Y.
@@ -1116,7 +1148,7 @@ false
 
 ### >= {#gteq}
 
-*x*&nbsp;`<a[integer,decimal,string,time]>` *y*&nbsp;`<a[integer,decimal,string,time]>` *&rarr;*&nbsp;`bool`
+*x*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *y*&nbsp;`<a[integer,decimal,string,time,bool,module{}]>` *&rarr;*&nbsp;`bool`
 
 
 True if X >= Y.
@@ -1754,7 +1786,7 @@ Retreive any accumulated events and optionally clear event state. Object returne
  *&rarr;*&nbsp;`[string]`
 
 
-Queries, or with arguments, sets execution config flags. Valid flags: ["AllowReadInLocal","DisableHistoryInTransactionalMode","DisableModuleInstall","DisablePact40","DisablePactEvents","EnforceKeyFormats","OldReadOnlyBehavior","PreserveModuleIfacesBug","PreserveModuleNameBug","PreserveNsModuleInstallBug","PreserveShowDefs"]
+Queries, or with arguments, sets execution config flags. Valid flags: ["AllowReadInLocal","DisableHistoryInTransactionalMode","DisableModuleInstall","DisablePact40","DisablePact420","DisablePactEvents","EnforceKeyFormats","OldReadOnlyBehavior","PreserveModuleIfacesBug","PreserveModuleNameBug","PreserveNsModuleInstallBug","PreserveShowDefs"]
 ```lisp
 pact> (env-exec-config ['DisableHistoryInTransactionalMode]) (env-exec-config)
 ["DisableHistoryInTransactionalMode"]

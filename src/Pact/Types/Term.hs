@@ -79,6 +79,10 @@ module Pact.Types.Term
    tNativeTopLevelOnly,tObject,tSchemaName,
    tTableName,tTableType,tVar,tStep,tModuleName,
    tDynModRef,tDynMember,tModRef,tLam,
+   _TModule, _TList, _TDef, _TNative, _TConst, _TApp,
+   _TVar, _TBinding, _TLam, _TObject, _TSchema,
+   _TLiteral, _TGuard, _TUse, _TStep, _TModRef,
+   _TTable, _TDynamic,
    ToTerm(..),
    toTermList,toTObject,toTObjectMap,toTList,toTListV,
    typeof,typeof',guardTypeOf,
@@ -1471,6 +1475,7 @@ canEq TLiteral{} TLiteral{} = True
 canEq TTable{} TTable{} = True
 canEq TSchema{} TSchema{} = True
 canEq TGuard{} TGuard{} = True
+canEq TModRef{} TModRef{} = True
 canEq _ _ = False
 
 -- | Support pact `=` for value-level terms
@@ -1496,8 +1501,7 @@ termEq1 eq (TObject (Object (ObjectMap a) _ _ _) _) (TObject (Object (ObjectMap 
 termEq1 _ (TLiteral a _) (TLiteral b _) = a == b
 termEq1 eq (TGuard a _) (TGuard b _) = liftEq (termEq1 eq) a b
 termEq1 eq (TTable a b c d x _) (TTable e f g h y _) = a == e && b == f && c == g && liftEq (termEq1 eq) d h && x == y
-termEq1 eq (TSchema a b c d _) (TSchema e f g h _) = a == e && b == f && c == g && argEq d h
-  where argEq = liftEq (liftEq (termEq1 eq))
+termEq1 eq (TSchema a b c d _) (TSchema e f g h _) = a == e && b == f && c == g && length d == length h && and (zipWith (argEq1 (termEq1 eq)) d h)
 termEq1 eq (TVar a _) (TVar b _) = eq a b
 termEq1 _ (TModRef (ModRef am as _) _) (TModRef (ModRef bm bs _) _) = am == bm && as == bs
 termEq1 _ _ _ = False
@@ -1530,6 +1534,7 @@ makeLenses ''Def
 makeLenses ''Lam
 makeLenses ''Object
 makeLenses ''Term
+makePrisms ''Term
 
 -- This noop TH splice is required to ensure that all types that are defined
 -- above in this module are available in the type environment of the following

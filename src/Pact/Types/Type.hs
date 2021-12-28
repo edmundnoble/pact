@@ -40,6 +40,9 @@ module Pact.Types.Type
   , tvName
   , tvConstraint
   , Type(..)
+  , _TyAny, _TyVar, _TyPrim
+  , _TyList, _TySchema, _TyFun
+  , _TyUser, _TyModule
   , tyFunType
   , tyListType
   , tySchema
@@ -65,7 +68,7 @@ module Pact.Types.Type
   , tyObject
   , tyKeySet
   , tyTable
-
+  , argEq1
   ) where
 
 
@@ -420,6 +423,7 @@ elem' :: Foldable t => (a -> a -> Bool) -> a -> t a -> Bool
 elem' f = any . f
 
 makeLenses ''Type
+makePrisms ''Type
 makeLenses ''FunType
 makeLenses ''Arg
 makeLenses ''TypeVar
@@ -443,3 +447,6 @@ instance Eq1 FunType where
 instance Eq1 Arg where
     liftEq = $(makeLiftEq ''Arg)
 
+argEq1 :: (n -> n -> Bool) -> Arg n -> Arg n -> Bool
+argEq1 eq (Arg n t _) (Arg n' t' _) =
+  n == n' && liftEq eq t t'

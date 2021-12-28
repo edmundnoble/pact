@@ -6,6 +6,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
+
 
 -- |
 -- Module      :  Pact.Native
@@ -37,6 +39,7 @@ module Pact.Native
     , readStringDef
     , baseStrToInt
     , mapDef
+    , zipDef
     , foldDef
     , makeListDef
     , reverseDef
@@ -600,6 +603,14 @@ dropDef = defRNative "drop" drop' takeDrop
   ]
   "Drop COUNT values from LIST (or string), or entries having keys in KEYS from OBJECT. If COUNT is negative, drop from end. If COUNT exceeds the interval (-2^63,2^63), it is truncated to that range."
 
+zipDef :: NativeDef
+zipDef = defNative "zip" zip' zipTy
+  [ "(zip (+) [1 2 3 4] [4 5 6 7])"
+  , "(zip (-) [1 2 3 4] [4 5 6])"
+  , "(zip (+) [1 2 3] [4 5 6 7])"
+  ]
+  "Combine two lists with some function f, into a new list, the length of which is the length of the shortest list."
+
 
 atDef :: NativeDef
 atDef = defRNative "at" at'
@@ -669,6 +680,7 @@ langDefs =
     ,lengthDef
     ,takeDef
     ,dropDef
+    ,zipDef
     ,defRNative "remove" remove (funType (tTyObject (mkSchemaVar "o")) [("key",tTyString),("object",tTyObject (mkSchemaVar "o"))])
      ["(remove \"bar\" { \"foo\": 1, \"bar\": 2 })"]
      "Remove entry for KEY from OBJECT."
@@ -764,6 +776,9 @@ takeDrop :: FunTypes n
 takeDrop = funType listStringA [("count",tTyInteger),("list",listStringA)] <>
            funType obj [("keys",TyList tTyString),("object",obj)]
 
+zipTy :: FunTypes n
+zipTy = funType (TyList c) [("f", TyFun $ funType' c [("x", a), ("y", b)]),("list1", TyList a), ("list2", TyList b)]
+
 lam :: Type v -> Type v -> Type v
 lam x y = TyFun $ funType' y [("x",x)]
 
@@ -776,8 +791,8 @@ b = mkTyVar "b" []
 c = mkTyVar "c" []
 
 map' :: NativeFun e
-map' i as@[app@TApp {},l] = gasUnreduced i as $ reduce l >>= \l' -> case l' of
-           TList ls _ _ -> (\b' -> TList b' TyAny def) <$> forM ls (apply (_tApp app) . pure)
+map' i as@[tLamToApp -> TApp app _,l] = gasUnreduced i as $ reduce l >>= \l' -> case l' of
+           TList ls _ _ -> (\b' -> TList b' TyAny def) <$> forM ls (apply app . pure)
            t -> evalError' i $ "map: expecting list: " <> pretty (abbrev t)
 map' i as = argsError' i as
 
@@ -826,7 +841,7 @@ reverse' _ [l@TList{}] = return $ over tList V.reverse l
 reverse' i as = argsError i as
 
 fold' :: NativeFun e
-fold' i as@[app@TApp {},initv,l] = gasUnreduced i as $ reduce l >>= \l' -> case l' of
+fold' i as@[tLamToApp -> app@TApp {},initv,l] = gasUnreduced i as $ reduce l >>= \case
            TList ls _ _ -> reduce initv >>= \initv' ->
                          foldM (\r a' -> apply (_tApp app) [r,a']) initv' ls
            t -> evalError' i $ "fold: expecting list: " <> pretty (abbrev t)
@@ -834,14 +849,17 @@ fold' i as = argsError' i as
 
 
 filter' :: NativeFun e
-filter' i as@[app@TApp {},l] = gasUnreduced i as $ reduce l >>= \l' -> case l' of
-           TList ls lt _ -> fmap (toTListV lt def) $ (`V.filterM` ls) $ \a' -> do
-                           t <- apply (_tApp app) [a']
-                           case t of
-                             (TLiteral (LBool bo) _) -> return bo
-                             _ -> return False -- hmm, too permissive here, select is stricter
-           t -> evalError' i $ "filter: expecting list: " <> pretty (abbrev t)
+filter' i as@[tLamToApp -> app@TApp {},l] = gasUnreduced i as $ reduce l >>= \case
+  TList ls lt _ -> fmap (toTListV lt def) $ (`V.filterM` ls) $ \a' -> do
+    t <- apply (_tApp app) [a']
+    case t of
+      (TLiteral (LBool bo) _) -> return bo
+      _ -> ifExecutionFlagSet FlagDisablePact420
+             (return False)
+             (evalError' i $ "filter: expected closure to return bool: " <> pretty app)
+  t -> evalError' i $ "filter: expecting list: " <> pretty (abbrev t)
 filter' i as = argsError' i as
+
 
 length' :: RNativeFun e
 length' _ [TList ls _ _] = return $ toTerm (length ls)
@@ -862,6 +880,16 @@ drop' _ [TLitInteger c',TLitString l] = return $ toTerm $ pack $ tordL drop c' (
 drop' _ [TList {..},TObject (Object (ObjectMap o) oTy _ _) _] = asKeyList _tList >>= \l ->
   return $ toTObjectMap oTy def $ ObjectMap $ M.withoutKeys o l
 drop' i as = argsError i as
+
+zip' :: NativeFun e
+zip' i as@[tLamToApp -> TApp app _, l1, l2] = gasUnreduced i as $ (,) <$> reduce l1 <*> reduce l2 >>= \case
+ -- reduce list terms first, though unfortunately
+  -- this means that lambdas within lists won't work for now.
+  (TList l1' _ _, TList l2' _ _) -> do
+    terms <- sequence $ V.zipWith (\e1 e2 -> apply app [e1, e2]) l1' l2'
+    pure $ TList terms TyAny (getInfo i)
+  (l, r) -> argsError i [l, r]
+zip' i as = argsError' i as
 
 asKeyList :: V.Vector (Term Name) -> Eval e (S.Set FieldKey)
 asKeyList l = fmap (S.fromList . V.toList) . V.forM l $ \t -> case t of
@@ -913,21 +941,16 @@ remove _ [TLitString key,TObject (Object (ObjectMap ps) t _ _) _] =
 remove i as = argsError i as
 
 compose :: NativeFun e
-compose i as@[appA@TApp {},appB@TApp {},v] = gasUnreduced i as $ do
+compose i as@[tLamToApp -> appA@TApp {},tLamToApp -> appB@TApp {},v] = gasUnreduced i as $ do
   v' <- reduce v
   a' <- apply (_tApp appA) [v']
   apply (_tApp appB) [a']
 compose i as = argsError' i as
 
-
-
-
 readMsg :: RNativeFun e
 readMsg i [TLitString key] = fromPactValue <$> parseMsgKey i "read-msg" key
 readMsg i [] = fromPactValue <$> parseMsgKey' i "read-msg" Nothing
 readMsg i as = argsError i as
-
-
 
 pactId :: RNativeFun e
 pactId i [] = toTerm <$> getPactId i
@@ -992,7 +1015,7 @@ resume i as = case as of
   _ -> argsError' i as
 
 where' :: NativeFun e
-where' i as@[k',app@TApp{},r'] = gasUnreduced i as $ ((,) <$> reduce k' <*> reduce r') >>= \kr -> case kr of
+where' i as@[k',tLamToApp -> app@TApp{},r'] = gasUnreduced i as $ ((,) <$> reduce k' <*> reduce r') >>= \kr -> case kr of
   (k,r@TObject {}) -> lookupObj k (_oObject $ _tObject r) >>= \v -> apply (_tApp app) [v]
   _ -> argsError' i as
 where' i as = argsError' i as
