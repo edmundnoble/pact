@@ -98,19 +98,6 @@ instance Ord n => Monoid (FreeTyVars n) where
 class Substitutable p n | p -> n where
   subst :: Subst n -> p -> p
 
--- instance Ord n => Substitutable (Rho n) n where
---   subst s@(Subst _ rows) = \case
---     RhoPredicate preds ty ->
---       RhoPredicate (foldr f [] preds) (subst s ty)
---     where
---     f (WithoutField var field) li = case rows ^. at var of
---       Nothing -> WithoutField var field:li
---       Just row -> case row of
---         RowTy  _ _-> li
---         RowVar n -> WithoutField n field : li
---         EmptyRow -> li
-
-
 instance Ord n => Substitutable (Row n) n where
   subst s@(Subst _ rows) = \case
     RowVar r -> fromMaybe (RowVar r) $ rows ^. at r

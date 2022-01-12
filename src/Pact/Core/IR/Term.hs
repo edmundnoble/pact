@@ -64,7 +64,7 @@ data Term name builtin info
   -- ^ error term , error "blah"
   | Builtin builtin info
   -- ^ Built-in ops, e.g (+)
-  | DynAccess Text info
+  | DynAccess name info
   -- ^ For some module m, m::f
   | Constant Literal info
   -- ^ Literals
