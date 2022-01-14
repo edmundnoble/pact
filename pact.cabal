@@ -146,13 +146,6 @@ library
     Pact.Types.Version
     Pact.Types.Typecheck
     Pact.Typechecker
-    Pact.Core.Builtin
-    Pact.Core.Names
-    Pact.Core.Type
-    Pact.Core.Typed.Typecheck
-    Pact.Core.Typed.Term
-    Pact.Core.IR.Term
-    Pact.Core.IR.Typecheck
   build-depends:
     , Decimal >= 0.4.2 && < 0.6
     , QuickCheck >= 2.12.6.1
@@ -317,7 +310,30 @@ library
 
 library pact-core
   import:  pact-common
-  build-depends: pact
+  hs-source-dirs: pact-core
+  build-depends:
+    , pact
+    , criterion >= 1.1.4 && < 1.6
+    , cryptonite
+    , direct-sqlite == 2.3.26
+    , http-client
+    , memory
+    , safe-exceptions >= 0.1.5.0 && < 0.2
+    , servant-client
+    , servant-client-core
+    , statistics >= 0.13.3 && < 0.16
+    , yaml
+  ghc-options: -Wall -Werror -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  ghc-prof-options: -fprof-auto -fprof-auto-calls
+  default-language:    Haskell2010
+  exposed-modules:
+    Pact.Core.Builtin
+    Pact.Core.Names
+    Pact.Core.Type
+    Pact.Core.Typed.Typecheck
+    Pact.Core.Typed.Term
+    Pact.Core.IR.Term
+    Pact.Core.IR.Typecheck
 
 executable pact
   if impl(ghcjs) || !flag(build-tool)
