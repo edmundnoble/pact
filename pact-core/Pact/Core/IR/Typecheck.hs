@@ -469,3 +469,4 @@ inferDefun (Defun dn term typ) = do
       _ <- unifies fty (termTy term')
       pure (Defun (dn, tsToTyForall rty) term' typ)
     Nothing -> pure (Defun (dn, tsToTyForall rty) term' typ)
+

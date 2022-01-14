@@ -92,29 +92,6 @@ instance Plated (Type n) where
     TyForall ns rs ty ->
       TyForall ns rs <$> f ty
 
--- note: Row variables cannot be "Substituted" for non-rows.
--- substInTy :: Ord n => Map.Map n (Type n) -> Type n -> Type n
--- substInTy m = \case
---     TyVar n -> fromMaybe (TyVar n) $ m ^. at n
---     TyPrim p -> TyPrim p
---     TyList tys -> TyList (substInTy m tys)
---     TyRow r -> substRow r
---     TyForall ns rs ty ->
---       let m' = Map.fromList [(n', TyVar n') | n' <- ns] `Map.union` m
---       in TyForall ns (substInTy m' ty)
---     x -> x
---   where
---   substRow = \case
---     RowTyVar r -> fromMaybe (TyRow (RowTyVar r)) $ m ^. at (_rowVar r)
---     RowTy fields mv ->
---       case mv of
---         Nothing -> TyRow $ RowTy (substInTy m <$> fields) Nothing
---         Just rv -> case m ^. at (_rowVar rv) of
---           Just (TyRow (RowTyVar rv')) -> TyRow $ RowTy (substInTy m <$> fields) (Just rv')
---           Just (TyRow (RowTy fields' rv')) -> TyRow $ RowTy (Map.union fields fields') rv'
---           Just _ -> error "fatal: row variable unified with non-row"
---           _ -> TyRow $ RowTy (substInTy m <$> fields) mv
-
 
 typeOfLit :: Literal -> Type n
 typeOfLit = TyPrim . \case
@@ -123,19 +100,3 @@ typeOfLit = TyPrim . \case
   LDecimal{} -> TyDecimal
   LBool{} -> TyBool
   LTime{} -> TyTime
-
--- instance (Ord n) => Eq (Type n) where
---   (TyVar n) == (TyVar n') = n == n'
---   (TyPrim p) == (TyPrim p') = p == p'
---   (TyFun l r) == (TyFun l' r') =
---     l == l' && r == r'
---   (TyRow row') == (TyRow row) =
---     row == row'
---   (TyList n) == (TyList n') = n == n'
-  -- (TyTable _ row) == (TyTable _ row') =
-  --   row == row'
-  -- (TyInterface n row) == (TyInterface n' row') =
-  --   n == n' && row == row'
-  -- (TyForall ns rs ty) == (TyForall ns' rs' ty') =
-  --   ns == rs ==
-  -- _ == _ = False
