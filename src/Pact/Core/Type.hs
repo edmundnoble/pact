@@ -27,6 +27,14 @@ data Row n
   | EmptyRow
   deriving (Eq, Show)
 
+newtype InterfaceType n
+  = InterfaceType n
+  deriving (Eq, Show)
+
+data ModuleType n
+  = ModuleType n [n]
+  deriving (Eq, Show)
+
 -- Todo: caps are a bit strange here
 -- same with defpacts. Not entirely sure how to type those yet.
 -- | Our internal core type language
@@ -52,8 +60,10 @@ data Type n
   -- -- ^ Tables, which may be inlined or optionally named
   -- -- | TyCap n (Type n) [TyRow n]
   -- -- ^ Capabilities (do we want the dependent caps as part of the type?)
-  -- | TyInterface n (Row n)
-  -- ^ interfaces as named rows, where defuns/consts correspond to fields
+  | TyInterface (InterfaceType n)
+   -- ^ interfaces, which are nominal
+  | TyModule (ModuleType n)
+  -- ^ module type being the name of the module + implemented interfaces.
   | TyForall [n] [n] (Type n)
   -- ^ Universally quantified types, which have to be part of the type
   -- constructor since system F
@@ -76,8 +86,9 @@ instance Plated (Type n) where
     TyList t -> TyList <$> f t
     -- TyTable n rows ->
     --   TyTable n <$> traverseRowTy f rows
-    -- TyInterface n rows ->
-      -- TyInterface n <$> traverseRowTy f rows
+    TyInterface n ->
+      pure $ TyInterface n
+    TyModule n -> pure $ TyModule n
     TyForall ns rs ty ->
       TyForall ns rs <$> f ty
 

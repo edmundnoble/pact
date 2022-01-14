@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 -- |
 -- Module      :  Pact.Core.IR.Term
@@ -15,25 +16,51 @@ import Control.Lens
 import Pact.Types.Hash (Hash)
 import Pact.Types.Exp (Literal)
 import Pact.Core.Type
-import Pact.Core.Names
+-- import Pact.Core.Names
 import Pact.Core.Builtin
 import qualified Pact.Types.Names as PNames
 import Data.Text(Text)
 
-data DefType
-  = DefCap
-  | Defun
-  | DefPact
-  | DefConst
-  deriving Show
+-- Todo: Not sure if this type is useful at all,
+-- since we're trying to share the `DefConst`
+-- type in interfaces.
+-- might just be useful to provide a lens into
+-- `Def` bodies.
+-- data DefType
+--   = DefCap
+--   | Defun
+--   | DefPact
+--   | DefConst
+--   deriving Show
+
+data Defun name tyname builtin info
+  = Defun
+  { _dfunName :: name
+  , _dfunTerm :: Term name tyname builtin info
+  , _dfunTermType :: Maybe (Type tyname)
+  } deriving Show
+
+data DefConst name tyname builtin info
+  = DefConst
+  { _dcName :: name
+  , _dcTerm :: Term name tyname builtin info
+  , _dcTermType :: Maybe (Type tyname)
+  } deriving Show
+
+-- Todo :: probably need a special form
+-- either structurally, or these typecheck different.
+data DefPact name tyname builtin info
+  = DefPact
+  { _dpName :: name
+  , _dpTerm :: Term name tyname builtin info
+  , _dpTermType :: Maybe (Type tyname)
+  } deriving Show
 
 data Def name tyname builtin info
-  = Def
-  { _defName :: name
-  , _defTerm :: Term name builtin info
-  , _defTermType :: Maybe (Type tyname)
-  , _defType :: DefType
-  } deriving Show
+  = Dfun (Defun name tyname builtin info)
+  | DConst (DefConst name tyname builtin info)
+  | DPact (DefPact name tyname builtin info)
+  deriving Show
 
 -- Todo:
 -- Support module guard
@@ -44,53 +71,75 @@ data Module name tyname builtin info
   , _modHash :: Hash
   } deriving Show
 
+data Interface name tyname builtin info
+  = Interface
+  { _ifName :: name
+  , _ifDefns :: [IfDef name tyname builtin info]
+  , _ifHash :: Hash
+  } deriving Show
+
+data IfDefun name tyname info
+  = IfDefun
+  { _ifdName :: name
+  , _ifdType :: Type tyname
+  , _ifdInfo :: info
+  } deriving Show
+
+data IfDef name tyname builtin info
+  = IfDfun (IfDefun name tyname info)
+  | IFDConst (DefConst name tyname builtin info)
+  deriving Show
+
+data TopLevel
+
 type TermP = Term PNames.Name Text RawBuiltin
 type DefP = Def PNames.Name Text RawBuiltin
 type ModuleP = Module PNames.Name Text RawBuiltin
 type CoreProgramP info = [ModuleP info]
 
-data Term name builtin info
+-- | Core IR
+data Term name tyname builtin info
   = Var name info
   -- ^ single variables e.g x
-  | Lam name (Term name builtin info) info
+  | Lam name (Maybe (Type tyname)) (Term name tyname builtin info) info
   -- ^ \x.e
-  | Let name (Term name builtin info) (Term name builtin info) info
+  | Let name (Maybe (Type tyname)) (Term name tyname builtin info) (Term name tyname builtin info) info
   -- ^ let x = e1 in e2
-  | App (Term name builtin info) (Term name builtin info) info
+  | App (Term name tyname builtin info) (Term name tyname builtin info) info
   -- ^ (e1 e2)
-  | Sequence (Term name builtin info) (Term name builtin info) info
+  | Sequence (Term name tyname builtin info) (Term name tyname builtin info) info
   -- ^ (e1) (e2)
   | Error String info
   -- ^ error term , error "blah"
   | Builtin builtin info
   -- ^ Built-in ops, e.g (+)
-  | DynAccess name info
+  | DynAccess name name info
   -- ^ For some module m, m::f
   | Constant Literal info
   -- ^ Literals
-  deriving (Show)
+  deriving (Show, Functor)
 
-termInfo :: Lens' (Term name builtin info) info
+termInfo :: Lens' (Term name tyname builtin info) info
 termInfo f = \case
   Var n i -> Var n <$> f i
-  Let n t1 t2 i ->
-    Let n t1 t2 <$> f i
-  Lam n term i -> Lam n term <$> f i
+  Let n mty t1 t2 i ->
+    Let n mty t1 t2 <$> f i
+  Lam n mty term i -> Lam n mty term <$> f i
   App t1 t2 i -> App t1 t2 <$> f i
   Error s i -> Error s <$> f i
   Builtin b i -> Builtin b <$> f i
   Constant l i -> Constant l <$> f i
   Sequence l r i -> Sequence l r <$> f i
-  DynAccess t i -> DynAccess t <$> f i
+  DynAccess n1 n2 i -> DynAccess n1 n2 <$> f i
 
-instance Plated (Term name builtin info) where
+instance Plated (Term name tyname builtin info) where
   plate f = \case
     Var n i -> pure (Var n i)
-    Lam n term i -> Lam n <$> f term <*> pure i
-    Let n t1 t2 i -> Let n <$> f t1 <*> f t2 <*> pure i
+    Lam n mty term i -> Lam n mty <$> f term <*> pure i
+    Let n mty t1 t2 i -> Let n mty <$> f t1 <*> f t2 <*> pure i
     App t1 t2 i -> App <$> f t1 <*> f t2 <*> pure i
     Error s i -> pure (Error s i)
     Builtin b i -> pure (Builtin b i)
     Constant l i -> pure (Constant l i)
     Sequence l r i -> Sequence <$> f l <*> f r <*> pure i
-    DynAccess t i -> pure (DynAccess t i)
+    DynAccess n1 n2 i -> pure (DynAccess n1 n2 i)
