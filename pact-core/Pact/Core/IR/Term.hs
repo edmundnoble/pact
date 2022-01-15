@@ -90,12 +90,17 @@ data IfDef name tyname builtin info
   | IFDConst (DefConst name tyname builtin info)
   deriving Show
 
-data TopLevel
+data TopLevel name tyname builtin info
+  = TLModule (Module name tyname builtin info)
+  | TLInterface (Interface name tyname builtin info)
+  | TLTerm (Term name tyname builtin info)
+  deriving Show
 
 type TermP = Term PNames.Name Text RawBuiltin
 type DefP = Def PNames.Name Text RawBuiltin
 type ModuleP = Module PNames.Name Text RawBuiltin
-type CoreProgramP info = [ModuleP info]
+type TopLevelP = TopLevel PNames.Name Text RawBuiltin
+type CoreProgramP info = [TopLevelP info]
 
 -- | Core IR
 data Term name tyname builtin info

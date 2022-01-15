@@ -384,6 +384,7 @@ inferTerm = \case
   Error e i -> do
     tv <- TyVar <$> freshVar
     pure (Error e (i, tv), [])
+  -- m::f
   DynAccess modref mem i -> do
     ty <- lookupTyEnv modref
     case ty of
