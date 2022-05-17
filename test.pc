@@ -24,7 +24,10 @@ interface blah {
 
 
 
-module Coin {
+module Coin governed by keyset keks {
+  import OtherModule { x, y, z } 
+  import OtherModule { * } 
+
   defun with-balance(hasBalance) = hasBalance.balance
 
   @managed TRANSFER-mgr(amount)
@@ -51,7 +54,7 @@ module Coin {
 
     with-capability(CREDIT(sender)) {
       if refund >= 0.0 then {
-        with-read(coin-table, sender) { lambda o ->
+        with-read(coin-table, sender) { fn o ->
           update(coin-table, sender, {balance:o.balance})
         }
       } else ()

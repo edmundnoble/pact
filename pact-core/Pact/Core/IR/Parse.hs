@@ -6,7 +6,7 @@ module Pact.Core.IR.Parse where
 import Data.Char(isAlphaNum, isLower)
 import Control.Monad.Combinators
 import Control.Monad.Combinators.Expr
-import Data.Foldable(foldl')
+import Data.Foldable
 import Data.List.NonEmpty(NonEmpty(..))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as Map
@@ -18,6 +18,7 @@ import Text.Megaparsec
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Text.Megaparsec.Char as C
 
+import Pact.Core.Guards
 import Pact.Core.IR.ParseTree
 import Pact.Core.Literal
 import Pact.Core.Names
@@ -54,10 +55,7 @@ lexeme :: Parser a -> Parser a
 lexeme = L.lexeme spaceConsumer
 
 variable :: Parser Text
-variable = lexeme $ do
-  c <- C.letterChar
-  rest <- takeWhileP Nothing (\c' -> isAlphaNum c' || c' == '-')
-  pure (T.cons c rest)
+variable = lexeme rawVariable
 
 rawVariable :: Parser Text
 rawVariable = do
@@ -91,6 +89,9 @@ qualifiedName = do
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
+
 intLiteral :: Parser Literal
 intLiteral = LInteger <$> lexeme L.decimal
 
@@ -105,8 +106,8 @@ unitLiteral =
 
 -- Todo: improve on this. this is not efficient. Alternatively, use something like
 -- the string parser in parsers
-stringLiteral :: Parser Literal
-stringLiteral = fmap (LString . T.pack) $
+stringLiteral :: Parser Text
+stringLiteral = fmap T.pack $
   C.char '"' *> manyTill L.charLiteral (C.char '"')
 
 statement :: Parser (Expr ParsedName ())
@@ -275,7 +276,7 @@ constantExpr = fmap (flip Constant ()) $
   intLiteral
   <|> boolLiteral
   <|> unitLiteral
-  <|> stringLiteral
+  <|> LString <$> stringLiteral
 
 expr' :: Parser (Expr ParsedName ())
 expr' = do
@@ -317,3 +318,27 @@ expr = makeExprParser expr' operatorTable
 topLevel :: Parser (Expr ParsedName ())
 topLevel = L.nonIndented spaceConsumerNL (lamStatement <|> statement <|> expr)
 
+module' :: Parser (Module ParsedName ())
+module' = do
+  _ <- keyword "module"
+  name <- moduleName
+  _ <- keyword "governed" >> keyword "by"
+  gov <- Governance <$> asum
+    [ Left . KeySetName <$> (keyword "keyset" >> (variable <|> stringLiteral)) 
+    , Right <$> (keyword "capability" >> (variable <|> stringLiteral))
+    ]
+  let 
+    import' = do
+      keyword "import"
+      sourceModule <- moduleName
+      spaceConsume
+      let 
+        names = do
+          spaceConsumerNL 
+          braces (Left <$> sepBy1 variable (symbol ",") <|> Right () <$ symbol "*") 
+          C.newline
+      names <|> spaceConsumerNL
+
+      
+  imports <- many import'
+  undefined
